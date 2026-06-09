@@ -547,15 +547,15 @@ def compute_all_points(person, group_standings, real_qualifiers,
     breakdown["Special: European Top 4"] = pts
 
     # Special: perfect group stage
-    pts, _ = score_perfect_group(person["perfect_group"], group_standings)
+    pts, _ = score_perfect_group(person.get("perfect_group", ""), group_standings)
     breakdown["Special: Perfect Group"] = pts
 
     # Special: favourite eliminated
-    pts, _ = score_fav_eliminated(person["fav_eliminated"], group_standings)
+    pts, _ = score_fav_eliminated(person.get("fav_eliminated", ""), group_standings)
     breakdown["Special: Fav Eliminated"] = pts
 
     # Special: underdog qualifies
-    pts, _ = score_underdog_qualifies(person["underdog_qualifies"], group_standings, real_qualifiers)
+    pts, _ = score_underdog_qualifies(person.get("underdog_qualifies", ""), group_standings, real_qualifiers)
     breakdown["Special: Underdog Qualifies"] = pts
 
     breakdown["TOTAL"] = sum(breakdown.values())
