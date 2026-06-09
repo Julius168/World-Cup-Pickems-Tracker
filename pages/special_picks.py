@@ -80,8 +80,8 @@ favs_eliminated = [f for f in FAVOURITES if f in group_data
 # Underdogs qualified
 underdogs_qualified = [u for u in UNDERDOGS if u in real_qualifiers]
 
-# European nations in top 4 — tracked from knockout stage results (0 until semis)
-european_top4_actual = 0  # will be updated manually or from API when semis done
+# European nations in top 4
+european_top4_actual = 0
 
 with st.spinner("Loading match data..."):
     match_stats = get_match_stats()
@@ -206,17 +206,17 @@ with tab2:
 
     st.markdown(f'<div class="person-name">{selected_person}</div>', unsafe_allow_html=True)
 
-    # Score all
-    zp_pts,  zp_res  = score_zero_points_team(person["zero_points_team"], group_data)
-    ud_pts,  ud_res  = score_range(person["underdog_points"], combined_pts)
+    # Score all — use .get() everywhere to avoid KeyErrors
+    zp_pts,  zp_res  = score_zero_points_team(person.get("zero_points_team", ""), group_data)
+    ud_pts,  ud_res  = score_range(person.get("underdog_points", ""), combined_pts)
     pg_pts,  pg_res  = score_perfect_group(person.get("perfect_group", ""), group_standings)
     fe_pts,  fe_res  = score_fav_eliminated(person.get("fav_eliminated", ""), group_standings)
     uq_pts,  uq_res  = score_underdog_qualifies(person.get("underdog_qualifies", ""), group_standings, real_qualifiers)
     eu_pts,  eu_res  = score_range(person.get("european_top4", ""), european_top4_actual)
-    ps_pts,  ps_res  = score_range(person["penalty_shootouts"], match_stats["penalty_shootouts"])
-    bc_pts,  bc_res  = score_range(person["biggest_comeback"],  match_stats["biggest_comeback"])
-    mg_pts,  mg_res  = score_range(person["most_goals_game"],   match_stats["most_goals_game"])
-    at_pts,  at_res  = score_range(person["most_added_time"],   match_stats["most_added_time"])
+    ps_pts,  ps_res  = score_range(person.get("penalty_shootouts", ""), match_stats["penalty_shootouts"])
+    bc_pts,  bc_res  = score_range(person.get("biggest_comeback", ""),  match_stats["biggest_comeback"])
+    mg_pts,  mg_res  = score_range(person.get("most_goals_game", ""),   match_stats["most_goals_game"])
+    at_pts,  at_res  = score_range(person.get("most_added_time", ""),   match_stats["most_added_time"])
 
     total = zp_pts + ud_pts + pg_pts + fe_pts + uq_pts + eu_pts + ps_pts + bc_pts + mg_pts + at_pts
     st.markdown(f'<div class="points-box">Total Points: {total}</div>', unsafe_allow_html=True)
@@ -224,22 +224,22 @@ with tab2:
 
     st.markdown('<div class="section-header">Group Stage</div>', unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
-    render_pick(col1, "🌍 Underdog Combined Pts", person["underdog_points"], f"Current: {combined_pts}", (ud_pts, ud_res))
-    render_pick(col2, "❌ Team to Get 0 Points",  person["zero_points_team"],
-                f"{group_data.get(person['zero_points_team'], {}).get('pts', '?')} pts", (zp_pts, zp_res))
-    render_pick(col3, "🌟 Perfect Group Stage",   person["perfect_group"],
+    render_pick(col1, "🌍 Underdog Combined Pts", person.get("underdog_points", "—"), f"Current: {combined_pts}", (ud_pts, ud_res))
+    render_pick(col2, "❌ Team to Get 0 Points",  person.get("zero_points_team", "—"),
+                f"{group_data.get(person.get('zero_points_team', ''), {}).get('pts', '?')} pts", (zp_pts, zp_res))
+    render_pick(col3, "🌟 Perfect Group Stage",   person.get("perfect_group", "—"),
                 f"Teams with 3W/3: {', '.join(perfect_teams) or 'None yet'}", (pg_pts, pg_res))
 
     col1, col2 = st.columns(2)
-    render_pick(col1, "💀 Favourite Eliminated",  person["fav_eliminated"],
+    render_pick(col1, "💀 Favourite Eliminated",  person.get("fav_eliminated", "—"),
                 f"Eliminated so far: {', '.join(favs_eliminated) or 'None yet'}", (fe_pts, fe_res))
-    render_pick(col2, "🚀 Underdog Qualifies",    person["underdog_qualifies"],
+    render_pick(col2, "🚀 Underdog Qualifies",    person.get("underdog_qualifies", "—"),
                 f"Qualified: {', '.join(underdogs_qualified) or 'None yet'}", (uq_pts, uq_res))
 
     st.markdown('<div class="section-header">Tournament Stats</div>', unsafe_allow_html=True)
     col1, col2, col3, col4, col5 = st.columns(5)
-    render_pick(col1, "🇪🇺 European Top 4",       person["european_top4"],    f"Current: {european_top4_actual}", (eu_pts, eu_res))
-    render_pick(col2, "🥅 Penalty Shootouts",     person["penalty_shootouts"], f"Current: {match_stats['penalty_shootouts']}", (ps_pts, ps_res))
-    render_pick(col3, "💪 Biggest Comeback",      person["biggest_comeback"],  f"Current: {match_stats['biggest_comeback']}", (bc_pts, bc_res))
-    render_pick(col4, "⚽ Most Goals Game",        person["most_goals_game"],   f"Current: {match_stats['most_goals_game']}", (mg_pts, mg_res))
-    render_pick(col5, "⏱️ Most Added Time",        person["most_added_time"],   f"Current: {match_stats['most_added_time']} min", (at_pts, at_res))
+    render_pick(col1, "🇪🇺 European Top 4",       person.get("european_top4", "—"),    f"Current: {european_top4_actual}", (eu_pts, eu_res))
+    render_pick(col2, "🥅 Penalty Shootouts",     person.get("penalty_shootouts", "—"), f"Current: {match_stats['penalty_shootouts']}", (ps_pts, ps_res))
+    render_pick(col3, "💪 Biggest Comeback",      person.get("biggest_comeback", "—"),  f"Current: {match_stats['biggest_comeback']}", (bc_pts, bc_res))
+    render_pick(col4, "⚽ Most Goals Game",        person.get("most_goals_game", "—"),   f"Current: {match_stats['most_goals_game']}", (mg_pts, mg_res))
+    render_pick(col5, "⏱️ Most Added Time",        person.get("most_added_time", "—"),   f"Current: {match_stats['most_added_time']} min", (at_pts, at_res))
