@@ -37,7 +37,7 @@ st.markdown('<h1 class="page-title">🏟️ Team Stats</h1>', unsafe_allow_html=
 
 ICONS = {
     "Winning Team": "🏆", "Goals Per Match": "⚽",
-    "Least Goals Conceded": "🛡️", "Set Piece Goals": "🎯", "Penalties Awarded": "🟢",
+    "Least Goals Conceded": "🛡️", "Set Piece Goals": "🎯","Fouls Per Match": "🟨",
 }
 
 @st.cache_data(ttl=300)

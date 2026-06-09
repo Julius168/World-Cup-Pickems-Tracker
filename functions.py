@@ -70,14 +70,14 @@ TEAM_CSV_COLS = {
     "Goals Per Match":      "Team most goals per match",
     "Least Goals Conceded": "Team least goals conceded per match",
     "Set Piece Goals":      "Most set-piece goals (non-penalty)",
-    "Penalties Awarded":    "Most penalties awarded (non shootout)",
+    "Fouls Per Match":      "Most fouls committed per match",
 }
 TEAM_API_KEYS = {
     "Winning Team":         "rating_team",
     "Goals Per Match":      "goals_team_match",
     "Least Goals Conceded": "goals_conceded_team_match",
     "Set Piece Goals":      "_set_piece_goals_team",
-    "Penalties Awarded":    "penalty_won_team",
+    "Fouls Per Match":      "fk_foul_lost_team",
 }
 
 # ── API fetchers ──────────────────────────────────────────────────────────────

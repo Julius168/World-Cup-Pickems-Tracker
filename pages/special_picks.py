@@ -173,7 +173,7 @@ with tab1:
     col1, col2, col3, col4, col5 = st.columns(5)
 
     for col, icon, label, key, sub in [
-        (col1, "🇪🇺", "European Top 4",   "european_top4",    "Nations in semis/final"),
+        (col1, "🇪🇺", "In Top 4",   "european_top4",    "EU Nations in semis"),
         (col2, "🥅", "Penalty Shootouts", "penalty_shootouts", "Total so far"),
         (col3, "💪", "Biggest Comeback",  "biggest_comeback",  match_stats["biggest_comeback_match"] or "—"),
         (col4, "⚽", "Most Goals Game",   "most_goals_game",   match_stats["most_goals_match"] or "—"),
