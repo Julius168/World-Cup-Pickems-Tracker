@@ -353,7 +353,7 @@ def load_predictions():
             "most_goals_game":        get_col(row, "Most goals scored in a game (both teams combined including extra time)"),
             "most_added_time":        get_col(row, "most added time at 90 \n"),
             "european_top4":          get_col(row, "European Nations in top 4 "),
-            "perfect_group":          get_col(row, "Perfect Group stage"),
+            "perfect_group":          get_col(row, "Perfect Group stage (9 points)"),
             "fav_eliminated":         get_col(row, "Group favourite eliminated in group stage"),
             "underdog_qualifies":     get_col(row, "Group underdog to make it out of group stage"),
         }
@@ -543,7 +543,7 @@ def compute_all_points(person, group_standings, real_qualifiers,
         breakdown[label] = pts
 
     # Special: european top 4
-    pts, _ = score_range(person["european_top4"], match_stats.get("european_top4", 0))
+    pts, _ = score_range(person.get("european_top4", ""), 0)
     breakdown["Special: European Top 4"] = pts
 
     # Special: perfect group stage
