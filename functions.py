@@ -50,8 +50,21 @@ PLAYER_API_KEYS = {
     "Top Scorer":   "goals",
     "Top Assister": "goal_assist",
     "Yellow Cards": "yellow_card",
-    "Golden Glove": "_save_percentage",
+    "Golden Glove": "saves",
 }
+
+# ── Favourites & Underdogs ────────────────────────────────────────────────────
+FAVOURITES = [
+    "Mexico", "Czechia", "Switzerland", "Canada", "Brazil", "Morocco",
+    "USA", "Turkey", "Germany", "Ecuador", "Netherlands", "Japan",
+    "Belgium", "Egypt", "Spain", "Uruguay", "France", "Norway",
+    "Argentina", "Austria", "Portugal", "Colombia", "England", "Croatia",
+]
+
+UNDERDOGS = [
+    "South Africa", "Qatar", "Haiti", "Australia", "Curacao", "Tunisia",
+    "New Zealand", "Cape Verde", "Iraq", "Jordan", "Uzbekistan", "Panama",
+]
 TEAM_CSV_COLS = {
     "Winning Team":         "Winning team",
     "Goals Per Match":      "Team most goals per match",
@@ -313,23 +326,11 @@ def load_predictions():
         name = row["Name"]
         group_preds = {}
         for letter in group_letters:
-            # Find columns dynamically to handle inconsistent spacing
-            def find_col(letter, pos):
-                for col in df.columns:
-                    if col.strip().startswith(f"Group {letter}") and f"[{pos}]" in col:
-                        return col
-                return None
-
-            first  = find_col(letter, "First")
-            second = find_col(letter, "Second")
-            third  = find_col(letter, "Third")
-            fourth = find_col(letter, "Fourth")
-
             group_preds[letter] = [
-                str(row[first]).strip()  if first  else "",
-                str(row[second]).strip() if second else "",
-                str(row[third]).strip()  if third  else "",
-                str(row[fourth]).strip() if fourth else "",
+                row[f"Group {letter}  [First]"],
+                row[f"Group {letter}  [Second]"],
+                row[f"Group {letter}  [Third]"],
+                row[f"Group {letter}  [Fourth]"],
             ]
 
         third_str = str(row.get(THIRD_PLACE_COL, ""))
@@ -351,6 +352,10 @@ def load_predictions():
             "biggest_comeback":       get_col(row, "Biggest comeback\n(Quantity of goals trailed by while eventually winning the game)"),
             "most_goals_game":        get_col(row, "Most goals scored in a game (both teams combined including extra time)"),
             "most_added_time":        get_col(row, "most added time at 90 \n"),
+            "european_top4":          get_col(row, "European Nations in top 4 "),
+            "perfect_group":          get_col(row, "Perfect Group stage"),
+            "fav_eliminated":         get_col(row, "Group favourite eliminated in group stage"),
+            "underdog_qualifies":     get_col(row, "Group underdog to make it out of group stage"),
         }
 
     return predictions
@@ -431,6 +436,57 @@ def score_zero_points_team(picked_team, group_data):
     return 0, f"❌ +0 (got {actual_pts} pts)"
 
 
+
+def score_perfect_group(picked_team, group_standings):
+    """Score perfect group stage pick - team won all 3 games."""
+    if not picked_team:
+        return 0, "⬜ —"
+    for letter, data in group_standings.items():
+        for t in data["full"]:
+            if t["name"] == picked_team:
+                if t["played"] < 3:
+                    return 0, f"⏳ {t['wins']}W/{t['played']} played"
+                if t["wins"] == 3:
+                    return 50, "⭐ +50"
+                return 0, f"❌ +0 ({t['wins']}W in 3)"
+    return 0, "⬜ Not found"
+
+
+def score_fav_eliminated(picked_team, group_standings):
+    """Score favourite eliminated pick."""
+    if not picked_team:
+        return 0, "⬜ —"
+    # Extract just team name if format is 'Team (Group X)'
+    team_name = picked_team.split(" (Group")[0].strip()
+    for letter, data in group_standings.items():
+        for t in data["full"]:
+            if t["name"] == team_name:
+                if t["played"] < 3:
+                    return 0, f"⏳ {t['played']}/3 played"
+                eliminated = t.get("qualColor") != "#2AD572"
+                if eliminated:
+                    return 50, "⭐ +50"
+                return 0, "❌ +0 (qualified)"
+    return 0, "⬜ Not found"
+
+
+def score_underdog_qualifies(picked_team, group_standings, real_qualifiers):
+    """Score underdog qualifies pick."""
+    if not picked_team:
+        return 0, "⬜ —"
+    team_name = picked_team.split(" (Group")[0].strip()
+    # Check if group stage is done for this team
+    for letter, data in group_standings.items():
+        for t in data["full"]:
+            if t["name"] == team_name:
+                if t["played"] < 3:
+                    return 0, f"⏳ {t['played']}/3 played"
+                if team_name in real_qualifiers:
+                    return 50, "⭐ +50"
+                return 0, "❌ +0 (eliminated)"
+    return 0, "⬜ Not found"
+
+
 def compute_all_points(person, group_standings, real_qualifiers,
                        group_data, player_stats, team_stats, match_stats):
     """
@@ -485,6 +541,22 @@ def compute_all_points(person, group_standings, real_qualifiers,
     ]:
         pts, _ = score_range(person[field], match_stats.get(field, 0))
         breakdown[label] = pts
+
+    # Special: european top 4
+    pts, _ = score_range(person["european_top4"], match_stats.get("european_top4", 0))
+    breakdown["Special: European Top 4"] = pts
+
+    # Special: perfect group stage
+    pts, _ = score_perfect_group(person["perfect_group"], group_standings)
+    breakdown["Special: Perfect Group"] = pts
+
+    # Special: favourite eliminated
+    pts, _ = score_fav_eliminated(person["fav_eliminated"], group_standings)
+    breakdown["Special: Fav Eliminated"] = pts
+
+    # Special: underdog qualifies
+    pts, _ = score_underdog_qualifies(person["underdog_qualifies"], group_standings, real_qualifiers)
+    breakdown["Special: Underdog Qualifies"] = pts
 
     breakdown["TOTAL"] = sum(breakdown.values())
     return breakdown
