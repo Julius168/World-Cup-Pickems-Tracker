@@ -326,12 +326,17 @@ def load_predictions():
         name = row["Name"]
         group_preds = {}
         for letter in group_letters:
+            def find_col(pos):
+                for col in df.columns:
+                    if col.strip().startswith(f"Group {letter}") and f"[{pos}]" in col:
+                        return col
+                return None
             group_preds[letter] = [
-                row[f"Group {letter}  [First]"],
-                row[f"Group {letter}  [Second]"],
-                row[f"Group {letter}  [Third]"],
-                row[f"Group {letter}  [Fourth]"],
-            ]
+                str(row[find_col("First")]).strip()  if find_col("First")  else "",
+                str(row[find_col("Second")]).strip() if find_col("Second") else "",
+                str(row[find_col("Third")]).strip()  if find_col("Third")  else "",
+                str(row[find_col("Fourth")]).strip() if find_col("Fourth") else "",
+    ]
 
         third_str = str(row.get(THIRD_PLACE_COL, ""))
         third_groups = [g.strip().replace("Group ", "") for g in third_str.split(",") if g.strip()]
