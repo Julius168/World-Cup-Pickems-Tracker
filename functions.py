@@ -39,11 +39,11 @@ THIRD_PLACE_COL = "3rd place teams to go through (Select 8 based on your above c
 
 # ── CSV columns ───────────────────────────────────────────────────────────────
 PLAYER_CSV_COLS = {
-    "Golden Ball":  "World cup Golden Ball",
+    "Golden Ball":  "World cup Golden Ball (MVP award)",
     "Top Scorer":   "Top Scorer",
     "Top Assister": "Top Assister",
     "Yellow Cards": "Most Yellow Cards",
-    "Golden Glove": "Golden Glove\n",
+    "Golden Glove": "Most Saves per 90 (minimum 180 minutes)",
 }
 PLAYER_API_KEYS = {
     "Golden Ball":  "rating",
@@ -69,8 +69,8 @@ TEAM_CSV_COLS = {
     "Winning Team":         "Winning team",
     "Goals Per Match":      "Team most goals per match",
     "Least Goals Conceded": "Team least goals conceded per match",
-    "Set Piece Goals":      "Most set-piece goals (non-penalty)",
-    "Fouls Per Match":      "Most fouls committed per match",
+    "Set Piece Goals":      "Most set-piece goals ",
+    "Fouls Per Match":      "Fouls per match",
 }
 TEAM_API_KEYS = {
     "Winning Team":         "rating_team",
@@ -113,7 +113,7 @@ def fetch_player_stats():
     """Returns {stat_key: [topThree players]} from FotMob player stats"""
     try:
         # Change id=42 to id=77 when World Cup starts
-        response = requests.get("https://www.fotmob.com/api/data/leagues?id=42", timeout=10)
+        response = requests.get("https://www.fotmob.com/api/data/leagues?id=77", timeout=10)
         data = response.json()
         raw = data.get("stats", {}).get("players", [])
         indexed = {}
@@ -130,7 +130,7 @@ def fetch_team_stats():
     """Returns {stat_key: [topThree teams]} from FotMob team stats"""
     try:
         # Change id=42 to id=77 when World Cup starts
-        response = requests.get("https://www.fotmob.com/api/data/leagues?id=42", timeout=10)
+        response = requests.get("https://www.fotmob.com/api/data/leagues?id=77", timeout=10)
         data = response.json()
         raw = data.get("stats", {}).get("teams", [])
         indexed = {}
@@ -326,17 +326,17 @@ def load_predictions():
         name = row["Name"]
         group_preds = {}
         for letter in group_letters:
-            def find_col(pos):
-                for col in df.columns:
-                    if col.strip().startswith(f"Group {letter}") and f"[{pos}]" in col:
-                        return col
-                return None
-            group_preds[letter] = [
-                str(row[find_col("First")]).strip()  if find_col("First")  else "",
-                str(row[find_col("Second")]).strip() if find_col("Second") else "",
-                str(row[find_col("Third")]).strip()  if find_col("Third")  else "",
-                str(row[find_col("Fourth")]).strip() if find_col("Fourth") else "",
-    ]
+                def find_col(pos):
+                    for col in df.columns:
+                        if col.strip().startswith(f"Group {letter}") and f"[{pos}]" in col:
+                            return col
+                    return None
+                group_preds[letter] = [
+                    str(row[find_col("First")]).strip()  if find_col("First")  else "",
+                    str(row[find_col("Second")]).strip() if find_col("Second") else "",
+                    str(row[find_col("Third")]).strip()  if find_col("Third")  else "",
+                    str(row[find_col("Fourth")]).strip() if find_col("Fourth") else "",
+                ]
 
         third_str = str(row.get(THIRD_PLACE_COL, ""))
         third_groups = [g.strip().replace("Group ", "") for g in third_str.split(",") if g.strip()]
@@ -552,15 +552,15 @@ def compute_all_points(person, group_standings, real_qualifiers,
     breakdown["Special: European Top 4"] = pts
 
     # Special: perfect group stage
-    pts, _ = score_perfect_group(person.get("perfect_group", ""), group_standings)
+    pts, _ = score_perfect_group(person["perfect_group"], group_standings)
     breakdown["Special: Perfect Group"] = pts
 
     # Special: favourite eliminated
-    pts, _ = score_fav_eliminated(person.get("fav_eliminated", ""), group_standings)
+    pts, _ = score_fav_eliminated(person["fav_eliminated"], group_standings)
     breakdown["Special: Fav Eliminated"] = pts
 
     # Special: underdog qualifies
-    pts, _ = score_underdog_qualifies(person.get("underdog_qualifies", ""), group_standings, real_qualifiers)
+    pts, _ = score_underdog_qualifies(person["underdog_qualifies"], group_standings, real_qualifiers)
     breakdown["Special: Underdog Qualifies"] = pts
 
     breakdown["TOTAL"] = sum(breakdown.values())
