@@ -75,10 +75,10 @@ perfect_teams = [n for n, i in group_data.items() if i["played"] == 3 and i["win
 # Favourites eliminated (played 3, not qualified)
 favs_eliminated = [f for f in FAVOURITES if f in group_data
                    and group_data[f]["played"] == 3
-                   and group_data[f].get("qualColor") != "#2AD572"]
-
+                   and not group_data[f].get("qualColor")]
 # Underdogs qualified
-underdogs_qualified = [u for u in UNDERDOGS if u in real_qualifiers]
+underdogs_qualified = [u for u in UNDERDOGS if u in group_data 
+                       and group_data[u].get("qualColor")]
 
 # European nations in top 4
 european_top4_actual = 0

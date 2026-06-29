@@ -37,8 +37,18 @@ st.markdown('<h1 class="page-title">🏟️ Team Stats</h1>', unsafe_allow_html=
 
 ICONS = {
     "Winning Team": "🏆", "Goals Per Match": "⚽",
-    "Least Goals Conceded": "🛡️", "Set Piece Goals": "🎯","Fouls Per Match": "🟨",
+    "Least Goals Conceded": "🛡️", "Set Piece Goals": "🎯", "Fouls Per Match": "🟨",
 }
+
+def get_value_medals(entries):
+    """Build value->medal mapping handling ties by value."""
+    seen_values = []
+    for p in entries:
+        v = p.get("value")
+        if v not in seen_values:
+            seen_values.append(v)
+    medal_map = {0: "🥇", 1: "🥈", 2: "🥉"}
+    return {v: medal_map.get(i, "") for i, v in enumerate(seen_values)}
 
 @st.cache_data(ttl=300)
 def get_stats():
@@ -49,23 +59,24 @@ def get_predictions():
     return load_predictions()
 
 def render_live_category(col, category, stats):
-    medals = ["🥇", "🥈", "🥉"]
-    icon = ICONS[category]
     api_key = TEAM_API_KEYS[category]
+    icon = ICONS[category]
     teams = stats.get(api_key, [])
     with col:
         st.markdown(f'<div class="category-title">{icon} {category}</div>', unsafe_allow_html=True)
         if not teams:
             st.markdown('<div class="no-data">No data yet</div>', unsafe_allow_html=True)
             return
-        for i, team in enumerate(teams[:3]):
+        value_medals = get_value_medals(teams[:3])
+        for team in teams[:3]:
             name = team.get("name", "")
             value = team.get("value", "")
+            medal = value_medals.get(value, "")
             if isinstance(value, float):
                 value = f"{value:.1f}"
             st.markdown(f"""
                 <div class="team-card">
-                    <div style="font-size:24px;width:32px">{medals[i]}</div>
+                    <div style="font-size:24px;width:32px">{medal}</div>
                     <div style="flex:1;padding:0 12px"><div class="team-name">{name}</div></div>
                     <div class="team-value">{value}</div>
                 </div>

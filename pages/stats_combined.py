@@ -42,6 +42,16 @@ ICONS = {
     "Yellow Cards": "🟨", "Golden Glove": "🧤",
 }
 
+def get_value_medals(entries):
+    """Build value->medal mapping handling ties by value."""
+    seen_values = []
+    for p in entries:
+        v = p.get("value")
+        if v not in seen_values:
+            seen_values.append(v)
+    medal_map = {0: "🥇", 1: "🥈", 2: "🥉"}
+    return {v: medal_map.get(i, "") for i, v in enumerate(seen_values)}
+
 @st.cache_data(ttl=300)
 def get_stats():
     return fetch_player_stats()
@@ -51,7 +61,6 @@ def get_predictions():
     return load_predictions()
 
 def render_live(col, key, title, stats):
-    medals = ["🥇", "🥈", "🥉"]
     suffix = "%" if key == "_save_percentage" else ""
     players = stats.get(key, [])
     with col:
@@ -59,15 +68,17 @@ def render_live(col, key, title, stats):
         if not players:
             st.markdown('<div class="no-data">No data yet</div>', unsafe_allow_html=True)
             return
-        for i, player in enumerate(players[:3]):
+        value_medals = get_value_medals(players[:3])
+        for player in players[:3]:
             name = player.get("name", "")
             team = player.get("teamName", "")
             value = player.get("value", "")
+            medal = value_medals.get(value, "")
             if isinstance(value, float):
                 value = f"{value:.1f}"
             st.markdown(f"""
                 <div class="player-card">
-                    <div style="font-size:24px;width:32px">{medals[i]}</div>
+                    <div style="font-size:24px;width:32px">{medal}</div>
                     <div class="player-info">
                         <div class="player-name">{name}</div>
                         <div class="player-team">{team}</div>

@@ -10,6 +10,25 @@ CSV_PATH = os.path.join(BASE_DIR, "predictions.csv")
 CACHE_PATH = os.path.join(BASE_DIR, "match_cache.json")
 
 # ── Match IDs ────────────────────────────────────────────────────────────────
+
+KNOCKOUT_ROUND_CSVS = {
+    "Round of 32": "Round_of_32_(Responses).csv",
+}
+
+KNOCKOUT_ROUND_POINTS = {
+    "Round of 32": 20,
+    "Round of 16": 40,
+    "Quarter Finals": 80,
+    "Semi Finals": 160,
+    "Third Place": 200,
+    "Final": 400,
+}
+
+ROUND_OF_32_IDS = [
+    "4653703","4653704","4653705","4653706","4653707","4653708",
+    "4653709","4653710","4653711","4653712","4653713","4653714",
+    "4653715","4653716","4653717","4653718",
+]
 MATCH_IDS = [
     # Group stage
     4667751, 4667752, 4667753, 4667754, 4667755, 4667756, 4667757, 4667758, 4667759, 4667760,
@@ -316,51 +335,52 @@ def load_predictions():
     df = pd.read_csv(CSV_PATH)
     predictions = {}
 
-    def get_col(row, col):
-        matching = [c for c in df.columns if c.strip() == col.strip()]
+    def get_col(col):
+        normalized_col = col.strip().replace('\n', '').replace('\r', '')
+        matching = [c for c in df.columns if c.strip().replace('\n', '').replace('\r', '') == normalized_col]
         return str(row[matching[0]]).strip() if matching else ""
-
     group_letters = "ABCDEFGHIJKL"
 
     for _, row in df.iterrows():
         name = row["Name"]
         group_preds = {}
         for letter in group_letters:
-                def find_col(pos):
-                    for col in df.columns:
-                        if col.strip().startswith(f"Group {letter}") and f"[{pos}]" in col:
-                            return col
-                    return None
-                group_preds[letter] = [
-                    str(row[find_col("First")]).strip()  if find_col("First")  else "",
-                    str(row[find_col("Second")]).strip() if find_col("Second") else "",
-                    str(row[find_col("Third")]).strip()  if find_col("Third")  else "",
-                    str(row[find_col("Fourth")]).strip() if find_col("Fourth") else "",
-                ]
+            def find_col(pos, l=letter):
+                for col in df.columns:
+                    if col.strip().startswith(f"Group {l}") and f"[{pos}]" in col:
+                        return col
+                return None
+            group_preds[letter] = [
+                str(row[find_col("First")]).strip()  if find_col("First")  else "",
+                str(row[find_col("Second")]).strip() if find_col("Second") else "",
+                str(row[find_col("Third")]).strip()  if find_col("Third")  else "",
+                str(row[find_col("Fourth")]).strip() if find_col("Fourth") else "",
+            ]
 
         third_str = str(row.get(THIRD_PLACE_COL, ""))
         third_groups = [g.strip().replace("Group ", "") for g in third_str.split(",") if g.strip()]
         predicted_third_teams = [group_preds[l][2] for l in third_groups if l in group_preds]
 
-        player_picks = {cat: get_col(row, col) for cat, col in PLAYER_CSV_COLS.items()}
-        team_picks   = {cat: get_col(row, col) for cat, col in TEAM_CSV_COLS.items()}
+        player_picks = {cat: get_col(col) for cat, col in PLAYER_CSV_COLS.items()}
+        team_picks   = {cat: get_col(col) for cat, col in TEAM_CSV_COLS.items()}
 
         predictions[name] = {
+            "_name":                  name,
             "groups":                 group_preds,
             "third_groups":           third_groups,
             "predicted_third_teams":  predicted_third_teams,
             "player_picks":           player_picks,
             "team_picks":             team_picks,
-            "zero_points_team":       get_col(row, "Team to get 0 points in groups"),
-            "underdog_points":        get_col(row, "How many points will Haiti, Curacao and Cape Verde get combined"),
-            "penalty_shootouts":      get_col(row, "Amount of penalty shootouts"),
-            "biggest_comeback":       get_col(row, "Biggest comeback\n(Quantity of goals trailed by while eventually winning the game)"),
-            "most_goals_game":        get_col(row, "Most goals scored in a game (both teams combined including extra time)"),
-            "most_added_time":        get_col(row, "most added time at 90 \n"),
-            "european_top4":          get_col(row, "European Nations in top 4 "),
-            "perfect_group":          get_col(row, "Perfect Group stage (9 points)"),
-            "fav_eliminated":         get_col(row, "Group favourite eliminated in group stage"),
-            "underdog_qualifies":     get_col(row, "Group underdog to make it out of group stage"),
+            "zero_points_team":       get_col("Team to get 0 points in groups"),
+            "underdog_points":        get_col("How many points will Haiti, Curacao and Cape Verde get combined"),
+            "penalty_shootouts":      get_col("Amount of penalty shootouts"),
+            "biggest_comeback":       get_col("Biggest comeback\n(Quantity of goals trailed by while eventually winning the game)"),
+            "most_goals_game":        get_col("Most goals scored in a game (both teams combined including extra time)"),
+            "most_added_time":        get_col("most added time at 90 \n"),
+            "european_top4":          get_col("European Nations in top 4 "),
+            "perfect_group":          get_col("Perfect Group stage (9 points)"),
+            "fav_eliminated":         get_col("Group favourite eliminated in group stage"),
+            "underdog_qualifies":     get_col("Group underdog to make it out of group stage"),
         }
 
     return predictions
@@ -400,14 +420,27 @@ def score_groups(person, group_standings, real_qualifiers):
 
 
 def score_top3_pick(picked, top3_entries, points_map={1: 50, 2: 20, 3: 10}):
-    """Score a single pick against a top3 list of dicts with 'name' key."""
+    """Score a single pick against a top3 list, handling ties by value."""
     if not picked or not top3_entries:
         return 0, "⬜ —"
-    names = [p.get("name", "") for p in top3_entries]
-    if picked in names:
-        rank = names.index(picked) + 1
-        pts = points_map.get(rank, 0)
-        return pts, f"{'⭐' if rank == 1 else '✅'} +{pts}"
+    seen_values = []
+    for p in top3_entries:
+        v = p.get("value")
+        if v not in seen_values:
+            seen_values.append(v)
+    value_to_rank = {}
+    rank = 1
+    for v in seen_values:
+        value_to_rank[v] = rank
+        count = sum(1 for p in top3_entries if p.get("value") == v)
+        rank += count
+    for player in top3_entries:
+        if player.get("name", "") == picked:
+            true_rank = value_to_rank.get(player.get("value"), 99)
+            pts = points_map.get(true_rank, 0)
+            if pts > 0:
+                return pts, f"{'⭐' if true_rank == 1 else '✅'} +{pts}"
+            return 0, "❌ +0"
     return 0, "❌ +0"
 
 
@@ -468,7 +501,7 @@ def score_fav_eliminated(picked_team, group_standings):
             if t["name"] == team_name:
                 if t["played"] < 3:
                     return 0, f"⏳ {t['played']}/3 played"
-                eliminated = t.get("qualColor") != "#2AD572"
+                eliminated = not t.get("qualColor")
                 if eliminated:
                     return 50, "⭐ +50"
                 return 0, "❌ +0 (qualified)"
@@ -480,17 +513,137 @@ def score_underdog_qualifies(picked_team, group_standings, real_qualifiers):
     if not picked_team:
         return 0, "⬜ —"
     team_name = picked_team.split(" (Group")[0].strip()
-    # Check if group stage is done for this team
     for letter, data in group_standings.items():
         for t in data["full"]:
             if t["name"] == team_name:
                 if t["played"] < 3:
                     return 0, f"⏳ {t['played']}/3 played"
-                if team_name in real_qualifiers:
+                if t.get("qualColor"):
                     return 50, "⭐ +50"
                 return 0, "❌ +0 (eliminated)"
     return 0, "⬜ Not found"
 
+
+
+def load_knockout_predictions_for_scoring():
+    """Load all knockout CSVs, return {name: {round: [picks]}}"""
+    all_preds = {}
+    for round_name, filename in KNOCKOUT_ROUND_CSVS.items():
+        csv_path = os.path.join(BASE_DIR, filename)
+        if not os.path.exists(csv_path):
+            continue
+        df = pd.read_csv(csv_path)
+        num_matches = len([c for c in df.columns if c.startswith("Match")])
+        for _, row in df.iterrows():
+            name = str(row.get("Name", "")).strip()
+            if not name or name == "nan":
+                continue
+            picks = [str(row.get(f"Match {i}", "")).strip() for i in range(1, num_matches + 1)]
+            if name not in all_preds:
+                all_preds[name] = {}
+            all_preds[name][round_name] = picks
+    return all_preds
+
+
+
+def fetch_knockout_results():
+    try:
+        r = requests.get("https://www.fotmob.com/api/data/leagues?id=77", timeout=10)
+        data = r.json()
+        matches_raw = data.get("matches", {}).get("allMatches", [])
+        results = {}
+        for m in matches_raw:
+            if m.get("round") == "1/16":
+                mid = str(m["id"])
+                status = m.get("status", {})
+                finished = status.get("finished", False)
+                score_str = status.get("scoreStr", "")
+                home_name = m.get("home", {}).get("name", "")
+                away_name = m.get("away", {}).get("name", "")
+                winner = None
+                home_score = None
+                away_score = None
+                if finished and score_str:
+                    try:
+                        parts = score_str.split(" - ")
+                        home_score = int(parts[0].strip())
+                        away_score = int(parts[1].strip())
+                        if home_score > away_score:
+                            winner = home_name
+                        elif away_score > home_score:
+                            winner = away_name
+                        else:
+                            # Draw — check penalty shootout
+                            lost = status.get("whoLostOnPenalties")
+                            if lost:
+                                winner = away_name if lost == home_name else home_name
+                    except:
+                        pass
+                results[mid] = {
+                    "finished": finished,
+                    "home": home_name,
+                    "away": away_name,
+                    "home_score": home_score,
+                    "away_score": away_score,
+                    "score_str": score_str,
+                    "winner": winner,
+                }
+        return results
+    except Exception as e:
+        return {}
+    
+def fetch_knockout_results_for_scoring():
+    """Fetch Round of 32 results from FotMob for scoring purposes."""
+    try:
+        r = requests.get("https://www.fotmob.com/api/data/leagues?id=77", timeout=10)
+        data = r.json()
+        matches_raw = data.get("fixtures", {}).get("allMatches", [])
+        results = {}
+        for m in matches_raw:
+            if m.get("round") == "1/16":
+                mid = str(m["id"])
+                status = m.get("status", {})
+                finished = status.get("finished", False)
+                score_str = status.get("scoreStr", "")
+                home_name = m.get("home", {}).get("name", "")
+                away_name = m.get("away", {}).get("name", "")
+                winner = None
+                if finished and score_str:
+                    try:
+                        parts = score_str.split(" - ")
+                        hs, as_ = int(parts[0].strip()), int(parts[1].strip())
+                        if hs > as_:
+                            winner = home_name
+                        elif as_ > hs:
+                            winner = away_name
+                        else:
+                            lost = status.get("whoLostOnPenalties")
+                            if lost:
+                                winner = away_name if lost == home_name else home_name
+                    except:
+                        pass
+                results[mid] = {"finished": finished, "home": home_name, "away": away_name, "winner": winner}
+        return results
+    except:
+        return {}
+
+def score_knockout_total(person_name):
+    """Returns total knockout points for a person across all rounds."""
+    ko_preds = load_knockout_predictions_for_scoring()
+    ko_results = fetch_knockout_results_for_scoring()
+    person_preds = ko_preds.get(person_name, {})
+    total = 0
+
+    r32_picks = person_preds.get("Round of 32", [])
+    r32_match_ids = ROUND_OF_32_IDS
+    for i, mid in enumerate(r32_match_ids):
+        pick = r32_picks[i] if i < len(r32_picks) else ""
+        res = ko_results.get(mid, {})
+        winner = res.get("winner")
+        if winner and pick and pick.strip().lower() == winner.strip().lower():
+            total += 20
+
+    return total
 
 def compute_all_points(person, group_standings, real_qualifiers,
                        group_data, player_stats, team_stats, match_stats):
@@ -552,16 +705,20 @@ def compute_all_points(person, group_standings, real_qualifiers,
     breakdown["Special: European Top 4"] = pts
 
     # Special: perfect group stage
-    pts, _ = score_perfect_group(person["perfect_group"], group_standings)
+    pts, _ = score_perfect_group(person.get("perfect_group", ""), group_standings)
     breakdown["Special: Perfect Group"] = pts
 
     # Special: favourite eliminated
-    pts, _ = score_fav_eliminated(person["fav_eliminated"], group_standings)
+    pts, _ = score_fav_eliminated(person.get("fav_eliminated", ""), group_standings)
     breakdown["Special: Fav Eliminated"] = pts
 
     # Special: underdog qualifies
-    pts, _ = score_underdog_qualifies(person["underdog_qualifies"], group_standings, real_qualifiers)
+    pts, _ = score_underdog_qualifies(person.get("underdog_qualifies", ""), group_standings, real_qualifiers)
     breakdown["Special: Underdog Qualifies"] = pts
+
+    # Knockout predictions
+    ko_pts = score_knockout_total(person.get("_name", ""))
+    breakdown["Knockouts"] = ko_pts
 
     breakdown["TOTAL"] = sum(breakdown.values())
     return breakdown
