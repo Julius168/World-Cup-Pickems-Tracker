@@ -335,14 +335,18 @@ def load_predictions():
     df = pd.read_csv(CSV_PATH)
     predictions = {}
 
-    def get_col(col):
-        normalized_col = col.strip().replace('\n', '').replace('\r', '')
-        matching = [c for c in df.columns if c.strip().replace('\n', '').replace('\r', '') == normalized_col]
-        return str(row[matching[0]]).strip() if matching else ""
     group_letters = "ABCDEFGHIJKL"
 
     for _, row in df.iterrows():
-        name = row["Name"]
+        name = str(row["Name"]).strip()
+        if not name or name == "nan":
+            continue
+
+        def get_col(col, _row=row):
+            normalized_col = col.strip().replace('\n', '').replace('\r', '')
+            matching = [c for c in df.columns if c.strip().replace('\n', '').replace('\r', '') == normalized_col]
+            return str(_row[matching[0]]).strip() if matching else ""
+
         group_preds = {}
         for letter in group_letters:
             def find_col(pos, l=letter):
@@ -420,34 +424,21 @@ def score_groups(person, group_standings, real_qualifiers):
 
 
 def score_top3_pick(picked, top3_entries, points_map={1: 50, 2: 20, 3: 10}):
-    """Score a single pick against a top3 list, handling ties by value."""
+    """Score a single pick against a top3 list of dicts with 'name' key."""
     if not picked or not top3_entries:
         return 0, "⬜ —"
-    seen_values = []
-    for p in top3_entries:
-        v = p.get("value")
-        if v not in seen_values:
-            seen_values.append(v)
-    value_to_rank = {}
-    rank = 1
-    for v in seen_values:
-        value_to_rank[v] = rank
-        count = sum(1 for p in top3_entries if p.get("value") == v)
-        rank += count
-    for player in top3_entries:
-        if player.get("name", "") == picked:
-            true_rank = value_to_rank.get(player.get("value"), 99)
-            pts = points_map.get(true_rank, 0)
-            if pts > 0:
-                return pts, f"{'⭐' if true_rank == 1 else '✅'} +{pts}"
-            return 0, "❌ +0"
+    names = [p.get("name", "") for p in top3_entries]
+    if picked in names:
+        rank = names.index(picked) + 1
+        pts = points_map.get(rank, 0)
+        return pts, f"{'⭐' if rank == 1 else '✅'} +{pts}"
     return 0, "❌ +0"
 
 
 def score_range(picked_str, actual):
     """Score a range/exact number pick. Returns (points, result_str)"""
     try:
-        picked_str = str(picked_str).strip()
+        picked_str = str(picked_str).strip().replace("+", "")
         if "-" in picked_str:
             low, high = [int(x.strip()) for x in picked_str.split("-")]
         else:
@@ -490,21 +481,28 @@ def score_perfect_group(picked_team, group_standings):
     return 0, "⬜ Not found"
 
 
-def score_fav_eliminated(picked_team, group_standings):
+def score_fav_eliminated(picked_team, group_standings, real_third_qualifiers=None):
     """Score favourite eliminated pick."""
+    if real_third_qualifiers is None:
+        real_third_qualifiers = []
     if not picked_team:
         return 0, "⬜ —"
-    # Extract just team name if format is 'Team (Group X)'
     team_name = picked_team.split(" (Group")[0].strip()
     for letter, data in group_standings.items():
         for t in data["full"]:
             if t["name"] == team_name:
                 if t["played"] < 3:
                     return 0, f"⏳ {t['played']}/3 played"
-                eliminated = not t.get("qualColor")
-                if eliminated:
+                qual_color = t.get("qualColor")
+                if qual_color == "#2AD572":
+                    return 0, "❌ +0 (qualified)"
+                elif qual_color == "#FFD908":
+                    if team_name in real_third_qualifiers:
+                        return 0, "❌ +0 (qualified as 3rd)"
+                    else:
+                        return 50, "⭐ +50"
+                else:
                     return 50, "⭐ +50"
-                return 0, "❌ +0 (qualified)"
     return 0, "⬜ Not found"
 
 
@@ -645,7 +643,7 @@ def score_knockout_total(person_name):
 
     return total
 
-def compute_all_points(person, group_standings, real_qualifiers,
+def compute_all_points(person, group_standings, real_qualifiers, real_third_qualifiers,
                        group_data, player_stats, team_stats, match_stats):
     """
     Compute full points breakdown for one person.
@@ -705,15 +703,15 @@ def compute_all_points(person, group_standings, real_qualifiers,
     breakdown["Special: European Top 4"] = pts
 
     # Special: perfect group stage
-    pts, _ = score_perfect_group(person.get("perfect_group", ""), group_standings)
+    pts, _ = score_perfect_group(person["perfect_group"], group_standings)
     breakdown["Special: Perfect Group"] = pts
 
     # Special: favourite eliminated
-    pts, _ = score_fav_eliminated(person.get("fav_eliminated", ""), group_standings)
+    pts, _ = score_fav_eliminated(person["fav_eliminated"], group_standings)
     breakdown["Special: Fav Eliminated"] = pts
 
     # Special: underdog qualifies
-    pts, _ = score_underdog_qualifies(person.get("underdog_qualifies", ""), group_standings, real_qualifiers)
+    pts, _ = score_underdog_qualifies(person["underdog_qualifies"], group_standings, real_qualifiers)
     breakdown["Special: Underdog Qualifies"] = pts
 
     # Knockout predictions

@@ -86,10 +86,10 @@ st.markdown('<h1 class="page-title">🥇 Leaderboard</h1>', unsafe_allow_html=Tr
 # ── Load all data ─────────────────────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def load_live_data():
-    group_standings, real_qualifiers, real_third = fetch_groups()
+    group_standings, real_qualifiers, real_third_qualifiers = fetch_groups()
     player_stats = fetch_player_stats()
     team_stats   = fetch_team_stats()
-    return group_standings, real_qualifiers, player_stats, team_stats
+    return group_standings, real_qualifiers, real_third_qualifiers, player_stats, team_stats
 
 @st.cache_data(ttl=3600)
 def load_match_data():
@@ -106,7 +106,7 @@ except FileNotFoundError:
     st.stop()
 
 with st.spinner("Loading live data..."):
-    group_standings, real_qualifiers, player_stats, team_stats = load_live_data()
+    group_standings, real_qualifiers, real_third_qualifiers, player_stats, team_stats = load_live_data()
 
 with st.spinner("Loading match data..."):
     match_stats = load_match_data()
@@ -121,7 +121,7 @@ for letter, d in group_standings.items():
 all_breakdowns = {}
 for name, person in predictions.items():
     all_breakdowns[name] = compute_all_points(
-        person, group_standings, real_qualifiers,
+        person, group_standings, real_qualifiers, real_third_qualifiers,
         group_data, player_stats, team_stats, match_stats
     )
 
@@ -142,11 +142,11 @@ with tab1:
         card_class = card_classes[i] if i < 3 else ""
         rank_num = "" if i < 3 else str(i + 1)
 
-        # Build mini breakdown string
-        group_pts  = breakdown.get("Groups (Quali)", 0) + breakdown.get("Groups (Exact)", 0)
-        player_pts = sum(v for k, v in breakdown.items() if k.startswith("Player:"))
-        team_pts   = sum(v for k, v in breakdown.items() if k.startswith("Team:"))
+        group_pts   = breakdown.get("Groups (Quali)", 0) + breakdown.get("Groups (Exact)", 0)
+        player_pts  = sum(v for k, v in breakdown.items() if k.startswith("Player:"))
+        team_pts    = sum(v for k, v in breakdown.items() if k.startswith("Team:"))
         special_pts = sum(v for k, v in breakdown.items() if k.startswith("Special:"))
+        ko_pts      = breakdown.get("Knockouts", 0)
 
         st.markdown(f"""
             <div class="rank-card {card_class}">
@@ -157,7 +157,8 @@ with tab1:
                         Groups: {group_pts} &nbsp;|&nbsp;
                         Players: {player_pts} &nbsp;|&nbsp;
                         Teams: {team_pts} &nbsp;|&nbsp;
-                        Special: {special_pts}
+                        Special: {special_pts} &nbsp;|&nbsp;
+                        Knockouts: {ko_pts}
                     </div>
                 </div>
                 <div class="rank-total">{total}</div>
@@ -169,7 +170,6 @@ with tab2:
     if not sorted_players:
         st.write("No data yet.")
     else:
-        # Build a dataframe with all categories as columns
         rows = []
         for name, breakdown in sorted_players:
             row = {"Name": name}
@@ -178,11 +178,9 @@ with tab2:
 
         df = pd.DataFrame(rows).set_index("Name")
 
-        # Reorder: TOTAL first
         cols = ["TOTAL"] + [c for c in df.columns if c != "TOTAL"]
         df = df[cols]
 
-        # Rename columns for display
         df.columns = [c.replace("Groups ", "Grp ").replace("Player: ", "").replace("Team: ", "").replace("Special: ", "") for c in df.columns]
 
         st.dataframe(

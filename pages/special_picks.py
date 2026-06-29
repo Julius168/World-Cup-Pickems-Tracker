@@ -55,14 +55,20 @@ def get_match_stats():
 def get_predictions():
     return load_predictions()
 
-group_standings, real_qualifiers, _ = get_groups()
+group_standings, real_qualifiers, real_third_qualifiers = get_groups()
 
 # Flat group_data
 group_data = {}
 for letter, d in group_standings.items():
     for t in d["full"]:
-        group_data[t["name"]] = {"pts": t["pts"], "played": t["played"],
-                                  "wins": t["wins"], "qualColor": t.get("qualColor")}
+        name = t["name"]
+        entry = {"pts": t["pts"], "played": t["played"],
+                 "wins": t["wins"], "qualColor": t.get("qualColor")}
+        group_data[name] = entry
+        # Also store accent-normalised version for matching
+        normalised = name.replace("ç", "c").replace("Ç", "C").replace("é", "e").replace("ü", "u")
+        if normalised != name:
+            group_data[normalised] = entry
 
 # Underdog combined points
 underdog_pts = {t: group_data.get(t, {}).get("pts", 0) for t in UNDERDOG_TEAMS}
@@ -75,7 +81,10 @@ perfect_teams = [n for n, i in group_data.items() if i["played"] == 3 and i["win
 # Favourites eliminated (played 3, not qualified)
 favs_eliminated = [f for f in FAVOURITES if f in group_data
                    and group_data[f]["played"] == 3
-                   and not group_data[f].get("qualColor")]
+                   and (
+                       not group_data[f].get("qualColor") or
+                       (group_data[f].get("qualColor") == "#FFD908" and f not in real_third_qualifiers)
+                   )]
 # Underdogs qualified
 underdogs_qualified = [u for u in UNDERDOGS if u in group_data 
                        and group_data[u].get("qualColor")]
@@ -210,7 +219,7 @@ with tab2:
     zp_pts,  zp_res  = score_zero_points_team(person.get("zero_points_team", ""), group_data)
     ud_pts,  ud_res  = score_range(person.get("underdog_points", ""), combined_pts)
     pg_pts,  pg_res  = score_perfect_group(person.get("perfect_group", ""), group_standings)
-    fe_pts,  fe_res  = score_fav_eliminated(person.get("fav_eliminated", ""), group_standings)
+    fe_pts,  fe_res  = score_fav_eliminated(person.get("fav_eliminated", ""), group_standings, real_third_qualifiers)
     uq_pts,  uq_res  = score_underdog_qualifies(person.get("underdog_qualifies", ""), group_standings, real_qualifiers)
     eu_pts,  eu_res  = score_range(person.get("european_top4", ""), european_top4_actual)
     ps_pts,  ps_res  = score_range(person.get("penalty_shootouts", ""), match_stats["penalty_shootouts"])
