@@ -213,9 +213,10 @@ def process_match(data):
         for goals in events_away.values():
             all_goal_events.extend(goals)
 
-        # Check for penalty shootout
-        result["has_shootout"] = any(
-            e.get("isPenaltyShootoutEvent", False) for e in all_goal_events
+        # Check for penalty shootout — use goal events OR whoLostOnPenalties as fallback
+        result["has_shootout"] = (
+            any(e.get("isPenaltyShootoutEvent", False) for e in all_goal_events) or
+            bool(header.get("status", {}).get("whoLostOnPenalties"))
         )
 
         # Sort by time
@@ -376,7 +377,7 @@ def load_predictions():
             "player_picks":           player_picks,
             "team_picks":             team_picks,
             "zero_points_team":       get_col("Team to get 0 points in groups"),
-            "underdog_points":        get_col("How many points will Haiti, Curacao and Cape Verde get combined"),
+            "underdog_points":        get_col("How many points will Haiti, Curaçao and Cape Verde get combined"),
             "penalty_shootouts":      get_col("Amount of penalty shootouts"),
             "biggest_comeback":       get_col("Biggest comeback\n(Quantity of goals trailed by while eventually winning the game)"),
             "most_goals_game":        get_col("Most goals scored in a game (both teams combined including extra time)"),
@@ -591,39 +592,40 @@ def fetch_knockout_results():
         return {}
     
 def fetch_knockout_results_for_scoring():
-    """Fetch Round of 32 results from FotMob for scoring purposes."""
-    try:
-        r = requests.get("https://www.fotmob.com/api/data/leagues?id=77", timeout=10)
-        data = r.json()
-        matches_raw = data.get("fixtures", {}).get("allMatches", [])
-        results = {}
-        for m in matches_raw:
-            if m.get("round") == "1/16":
-                mid = str(m["id"])
-                status = m.get("status", {})
-                finished = status.get("finished", False)
-                score_str = status.get("scoreStr", "")
-                home_name = m.get("home", {}).get("name", "")
-                away_name = m.get("away", {}).get("name", "")
-                winner = None
-                if finished and score_str:
-                    try:
-                        parts = score_str.split(" - ")
-                        hs, as_ = int(parts[0].strip()), int(parts[1].strip())
-                        if hs > as_:
-                            winner = home_name
-                        elif as_ > hs:
-                            winner = away_name
-                        else:
-                            lost = status.get("whoLostOnPenalties")
-                            if lost:
-                                winner = away_name if lost == home_name else home_name
-                    except:
-                        pass
-                results[mid] = {"finished": finished, "home": home_name, "away": away_name, "winner": winner}
-        return results
-    except:
-        return {}
+    """Fetch Round of 32 results from FotMob matchDetails for accurate penalty data."""
+    results = {}
+    for mid in ROUND_OF_32_IDS:
+        try:
+            r = requests.get(f"https://www.fotmob.com/api/data/matchDetails?matchId={mid}", timeout=5)
+            if r.status_code != 200:
+                continue
+            data = r.json()
+            general = data.get("general", {})
+            if not general.get("finished", False):
+                continue
+            header = data.get("header", {})
+            teams = header.get("teams", [])
+            if len(teams) < 2:
+                continue
+            home_name = teams[0].get("name", "")
+            away_name = teams[1].get("name", "")
+            status = header.get("status", {})
+            home_score = teams[0].get("score", 0) or 0
+            away_score = teams[1].get("score", 0) or 0
+            winner = None
+            if home_score > away_score:
+                winner = home_name
+            elif away_score > home_score:
+                winner = away_name
+            else:
+                lost = status.get("whoLostOnPenalties")
+                if lost:
+                    winner = away_name if lost == home_name else home_name
+            results[mid] = {"finished": True, "home": home_name, "away": away_name, "winner": winner}
+            time.sleep(0.1)
+        except Exception:
+            continue
+    return results
 
 def score_knockout_total(person_name):
     """Returns total knockout points for a person across all rounds."""

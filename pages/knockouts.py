@@ -9,8 +9,6 @@ from functions import load_predictions
 
 st.set_page_config(page_title="Knockouts", page_icon="⚔️", layout="wide")
 
-
-
 st.markdown("""
     <style>
         @import url('https://fonts.cdnfonts.com/css/bebas-neue');
@@ -78,50 +76,56 @@ ROUND_CSVS = {
 # ── Fetch match results from FotMob ──────────────────────────────────────────
 @st.cache_data(ttl=300)
 def fetch_knockout_results():
-    try:
-        r = requests.get("https://www.fotmob.com/api/data/leagues?id=77", timeout=10)
-        data = r.json()
-        matches_raw = data.get("fixtures", {}).get("allMatches", [])
-        results = {}
-        for m in matches_raw:
-            if m.get("round") == "1/16":
-                mid = str(m["id"])
-                status = m.get("status", {})
-                finished = status.get("finished", False)
-                score_str = status.get("scoreStr", "")
-                home_name = m.get("home", {}).get("name", "")
-                away_name = m.get("away", {}).get("name", "")
-                winner = None
-                home_score = None
-                away_score = None
-                if finished and score_str:
-                    try:
-                        parts = score_str.split(" - ")
-                        home_score = int(parts[0].strip())
-                        away_score = int(parts[1].strip())
-                        if home_score > away_score:
-                            winner = home_name
-                        elif away_score > home_score:
-                            winner = away_name
-                        else:
-                            # Draw — check penalty shootout
-                            lost = status.get("whoLostOnPenalties")
-                            if lost:
-                                winner = away_name if lost == home_name else home_name
-                    except:
-                        pass
-                results[mid] = {
-                    "finished": finished,
-                    "home": home_name,
-                    "away": away_name,
-                    "home_score": home_score,
-                    "away_score": away_score,
-                    "score_str": score_str,
-                    "winner": winner,
-                }
-        return results
-    except Exception as e:
-        return {}
+    results = {}
+    for match in ROUND_OF_32_MATCHES:
+        mid = match["id"]
+        try:
+            r = requests.get(f"https://www.fotmob.com/api/data/matchDetails?matchId={mid}", timeout=5)
+            if r.status_code != 200:
+                results[mid] = {"finished": False, "home": match["home"], "away": match["away"],
+                                 "home_score": None, "away_score": None, "score_str": "", "winner": None}
+                continue
+            data = r.json()
+            general = data.get("general", {})
+            finished = general.get("finished", False)
+            header = data.get("header", {})
+            teams = header.get("teams", [])
+
+            if not finished or len(teams) < 2:
+                results[mid] = {"finished": finished, "home": match["home"], "away": match["away"],
+                                 "home_score": None, "away_score": None, "score_str": "", "winner": None}
+                continue
+
+            home_name = teams[0].get("name", "")
+            away_name = teams[1].get("name", "")
+            home_score = teams[0].get("score", 0) or 0
+            away_score = teams[1].get("score", 0) or 0
+            status = header.get("status", {})
+
+            winner = None
+            if home_score > away_score:
+                winner = home_name
+            elif away_score > home_score:
+                winner = away_name
+            else:
+                lost = status.get("whoLostOnPenalties")
+                if lost:
+                    winner = away_name if lost == home_name else home_name
+
+            results[mid] = {
+                "finished": finished,
+                "home": home_name,
+                "away": away_name,
+                "home_score": home_score,
+                "away_score": away_score,
+                "score_str": f"{home_score} - {away_score}",
+                "winner": winner,
+                "penalties": bool(status.get("whoLostOnPenalties")),
+            }
+        except Exception:
+            results[mid] = {"finished": False, "home": match["home"], "away": match["away"],
+                             "home_score": None, "away_score": None, "score_str": "", "winner": None}
+    return results
 
 # ── Load knockout predictions CSVs ───────────────────────────────────────────
 @st.cache_data
@@ -184,6 +188,7 @@ def render_match_card(match, result, pick=None, correct=None, points=0):
         away_class = "team-name-winner" if winner == away else "team-name-loser"
 
     score_html = f'<span class="score">{home_score} - {away_score}</span>' if finished else '<span class="vs">vs</span>'
+    pen_html = ' <span style="font-size:10px;color:rgba(255,210,63,0.6)">(Pen)</span>' if res.get("penalties") else ""
 
     pred_html = ""
     if pick is not None:
@@ -199,7 +204,7 @@ def render_match_card(match, result, pick=None, correct=None, points=0):
             <div class="match-num">Match {match["num"]}</div>
             <div class="team-row">
                 <span class="team-name {home_class}">{home}</span>
-                {score_html}
+                {score_html}{pen_html}
                 <span class="team-name {away_class}">{away}</span>
             </div>
             {pred_html}
@@ -211,10 +216,6 @@ results = fetch_knockout_results()
 knockout_preds = load_knockout_predictions()
 
 tab1, tab2 = st.tabs(["📊 Bracket", "🎯 My Picks"])
-
-
-
-
 
 # ── Tab 1: Bracket ────────────────────────────────────────────────────────────
 with tab1:
