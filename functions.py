@@ -13,6 +13,7 @@ CACHE_PATH = os.path.join(BASE_DIR, "match_cache.json")
 
 KNOCKOUT_ROUND_CSVS = {
     "Round of 32": "Round_of_32_(Responses).csv",
+    "Round of 16": "Round_of_16_(Responses).csv",
 }
 
 KNOCKOUT_ROUND_POINTS = {
@@ -28,6 +29,11 @@ ROUND_OF_32_IDS = [
     "4653703","4653704","4653705","4653706","4653707","4653708",
     "4653709","4653710","4653711","4653712","4653713","4653714",
     "4653715","4653716","4653717","4653718",
+]
+
+ROUND_OF_16_IDS = [
+    "4653842","4653843","4653844","4653845",
+    "4653846","4653847","4653848","4653849",
 ]
 MATCH_IDS = [
     # Group stage
@@ -594,7 +600,7 @@ def fetch_knockout_results():
 def fetch_knockout_results_for_scoring():
     """Fetch Round of 32 results from FotMob matchDetails for accurate penalty data."""
     results = {}
-    for mid in ROUND_OF_32_IDS:
+    for mid in ROUND_OF_32_IDS + ROUND_OF_16_IDS:
         try:
             r = requests.get(f"https://www.fotmob.com/api/data/matchDetails?matchId={mid}", timeout=5)
             if r.status_code != 200:
@@ -635,13 +641,20 @@ def score_knockout_total(person_name):
     total = 0
 
     r32_picks = person_preds.get("Round of 32", [])
-    r32_match_ids = ROUND_OF_32_IDS
-    for i, mid in enumerate(r32_match_ids):
+    for i, mid in enumerate(ROUND_OF_32_IDS):
         pick = r32_picks[i] if i < len(r32_picks) else ""
         res = ko_results.get(mid, {})
         winner = res.get("winner")
         if winner and pick and pick.strip().lower() == winner.strip().lower():
             total += 20
+
+    r16_picks = person_preds.get("Round of 16", [])
+    for i, mid in enumerate(ROUND_OF_16_IDS):
+        pick = r16_picks[i] if i < len(r16_picks) else ""
+        res = ko_results.get(mid, {})
+        winner = res.get("winner")
+        if winner and pick and pick.strip().lower() == winner.strip().lower():
+            total += 40
 
     return total
 

@@ -39,7 +39,6 @@ st.markdown("""
 
 st.markdown('<h1 class="page-title">⚔️ Knockouts</h1>', unsafe_allow_html=True)
 
-# ── Match definitions (in order) ─────────────────────────────────────────────
 ROUND_OF_32_MATCHES = [
     {"num": 1,  "id": "4653703", "home": "Paraguay",             "away": "Germany"},
     {"num": 2,  "id": "4653704", "home": "France",               "away": "Sweden"},
@@ -59,6 +58,17 @@ ROUND_OF_32_MATCHES = [
     {"num": 16, "id": "4653718", "home": "Colombia",             "away": "Ghana"},
 ]
 
+ROUND_OF_16_MATCHES = [
+    {"num": 1, "id": "4653843", "home": "Canada",     "away": "Morocco"},
+    {"num": 2, "id": "4653842", "home": "Paraguay",   "away": "France"},
+    {"num": 3, "id": "4653844", "home": "Brazil",     "away": "Norway"},
+    {"num": 4, "id": "4653845", "home": "Mexico",     "away": "England"},
+    {"num": 5, "id": "4653846", "home": "Portugal",   "away": "Spain"},
+    {"num": 6, "id": "4653847", "home": "USA",        "away": "Belgium"},
+    {"num": 7, "id": "4653848", "home": "Argentina",  "away": "Egypt"},
+    {"num": 8, "id": "4653849", "home": "Switzerland","away": "Colombia"},
+]
+
 ROUND_POINTS = {
     "Round of 32": 20,
     "Round of 16": 40,
@@ -71,37 +81,34 @@ ROUND_POINTS = {
 CSV_DIR = os.path.join(os.path.dirname(__file__), "..")
 ROUND_CSVS = {
     "Round of 32": os.path.join(CSV_DIR, "Round_of_32_(Responses).csv"),
+    "Round of 16": os.path.join(CSV_DIR, "Round_of_16_(Responses).csv"),
 }
 
-# ── Fetch match results from FotMob ──────────────────────────────────────────
-@st.cache_data(ttl=300)
-def fetch_knockout_results():
+# ── Fetch results from matchDetails ──────────────────────────────────────────
+def fetch_round_results(matches):
     results = {}
-    for match in ROUND_OF_32_MATCHES:
+    for match in matches:
         mid = match["id"]
         try:
             r = requests.get(f"https://www.fotmob.com/api/data/matchDetails?matchId={mid}", timeout=5)
             if r.status_code != 200:
                 results[mid] = {"finished": False, "home": match["home"], "away": match["away"],
-                                 "home_score": None, "away_score": None, "score_str": "", "winner": None}
+                                 "home_score": None, "away_score": None, "winner": None}
                 continue
             data = r.json()
             general = data.get("general", {})
             finished = general.get("finished", False)
             header = data.get("header", {})
             teams = header.get("teams", [])
-
             if not finished or len(teams) < 2:
                 results[mid] = {"finished": finished, "home": match["home"], "away": match["away"],
-                                 "home_score": None, "away_score": None, "score_str": "", "winner": None}
+                                 "home_score": None, "away_score": None, "winner": None}
                 continue
-
             home_name = teams[0].get("name", "")
             away_name = teams[1].get("name", "")
             home_score = teams[0].get("score", 0) or 0
             away_score = teams[1].get("score", 0) or 0
             status = header.get("status", {})
-
             winner = None
             if home_score > away_score:
                 winner = home_name
@@ -111,26 +118,27 @@ def fetch_knockout_results():
                 lost = status.get("whoLostOnPenalties")
                 if lost:
                     winner = away_name if lost == home_name else home_name
-
             results[mid] = {
-                "finished": finished,
-                "home": home_name,
-                "away": away_name,
-                "home_score": home_score,
-                "away_score": away_score,
-                "score_str": f"{home_score} - {away_score}",
-                "winner": winner,
-                "penalties": bool(status.get("whoLostOnPenalties")),
+                "finished": finished, "home": home_name, "away": away_name,
+                "home_score": home_score, "away_score": away_score,
+                "winner": winner, "penalties": bool(status.get("whoLostOnPenalties")),
             }
         except Exception:
             results[mid] = {"finished": False, "home": match["home"], "away": match["away"],
-                             "home_score": None, "away_score": None, "score_str": "", "winner": None}
+                             "home_score": None, "away_score": None, "winner": None}
     return results
 
-# ── Load knockout predictions CSVs ───────────────────────────────────────────
+@st.cache_data(ttl=300)
+def fetch_all_results():
+    r32 = fetch_round_results(ROUND_OF_32_MATCHES)
+    r16 = fetch_round_results(ROUND_OF_16_MATCHES)
+    return {**r32, **r16}
+
+# ── Load predictions ──────────────────────────────────────────────────────────
 @st.cache_data
 def load_knockout_predictions():
-    all_preds = {}  # {name: {round: [pick1, pick2, ...]}}
+    
+    all_preds = {}
     for round_name, csv_path in ROUND_CSVS.items():
         if not os.path.exists(csv_path):
             continue
@@ -140,52 +148,47 @@ def load_knockout_predictions():
             name = str(row["Name"]).strip()
             if not name or name == "nan":
                 continue
-            picks = []
-            for i in range(1, num_matches + 1):
-                col = f"Match {i}"
-                picks.append(str(row.get(col, "")).strip())
+            picks = [str(row.get(f"Match {i}", "")).strip() for i in range(1, num_matches + 1)]
             if name not in all_preds:
                 all_preds[name] = {}
             all_preds[name][round_name] = picks
     return all_preds
 
-def score_knockout_predictions(person_preds, results):
-    """Returns total points and per-match results for Round of 32."""
+
+
+def score_round(person_preds, matches, round_name, points_per_correct, results):
     total = 0
     match_results = []
-    r32_picks = person_preds.get("Round of 32", [])
-    for i, match in enumerate(ROUND_OF_32_MATCHES):
-        pick = r32_picks[i] if i < len(r32_picks) else ""
-        result = results.get(match["id"], {})
-        winner = result.get("winner")
-        finished = result.get("finished", False)
+    picks = person_preds.get(round_name, [])
+    for i, match in enumerate(matches):
+        pick = picks[i] if i < len(picks) else ""
+        res = results.get(match["id"], {})
+        winner = res.get("winner")
+        finished = res.get("finished", False)
         if not finished:
             match_results.append((match, pick, None, 0))
         elif winner and pick:
             if pick.strip().lower() == winner.strip().lower():
-                total += 20
-                match_results.append((match, pick, True, 20))
+                total += points_per_correct
+                match_results.append((match, pick, True, points_per_correct))
             else:
                 match_results.append((match, pick, False, 0))
         else:
             match_results.append((match, pick, None, 0))
     return total, match_results
 
-def render_match_card(match, result, pick=None, correct=None, points=0):
+def render_match_card(match, results, pick=None, correct=None, points=0):
     mid = match["id"]
-    res = result.get(mid, {})
+    res = results.get(mid, {})
     finished = res.get("finished", False)
-    home = match["home"]
-    away = match["away"]
+    home = res.get("home", match["home"])
+    away = res.get("away", match["away"])
     home_score = res.get("home_score", "")
     away_score = res.get("away_score", "")
     winner = res.get("winner")
 
-    home_class = ""
-    away_class = ""
-    if finished and winner:
-        home_class = "team-name-winner" if winner == home else "team-name-loser"
-        away_class = "team-name-winner" if winner == away else "team-name-loser"
+    home_class = "team-name-winner" if (finished and winner == home) else ("team-name-loser" if (finished and winner and winner != home) else "")
+    away_class = "team-name-winner" if (finished and winner == away) else ("team-name-loser" if (finished and winner and winner != away) else "")
 
     score_html = f'<span class="score">{home_score} - {away_score}</span>' if finished else '<span class="vs">vs</span>'
     pen_html = ' <span style="font-size:10px;color:rgba(255,210,63,0.6)">(Pen)</span>' if res.get("penalties") else ""
@@ -211,33 +214,37 @@ def render_match_card(match, result, pick=None, correct=None, points=0):
         </div>
     """, unsafe_allow_html=True)
 
+def render_bracket_round(title, matches, results, match_results=None):
+    st.markdown(f'<div class="round-title">{title}</div>', unsafe_allow_html=True)
+    left = matches[:len(matches)//2]
+    right = matches[len(matches)//2:]
+    col_left, _, col_right = st.columns([5, 1, 5])
+    with col_left:
+        for i, match in enumerate(left):
+            if match_results:
+                _, pick, correct, pts = match_results[i]
+                render_match_card(match, results, pick, correct, pts)
+            else:
+                render_match_card(match, results)
+    with col_right:
+        for i, match in enumerate(right):
+            idx = i + len(left)
+            if match_results:
+                _, pick, correct, pts = match_results[idx]
+                render_match_card(match, results, pick, correct, pts)
+            else:
+                render_match_card(match, results)
+
 # ── Load data ─────────────────────────────────────────────────────────────────
-results = fetch_knockout_results()
+results = fetch_all_results()
 knockout_preds = load_knockout_predictions()
 
 tab1, tab2 = st.tabs(["📊 Bracket", "🎯 My Picks"])
 
-# ── Tab 1: Bracket ────────────────────────────────────────────────────────────
 with tab1:
-    st.markdown('<div class="round-title">Round of 32</div>', unsafe_allow_html=True)
-    left_matches = ROUND_OF_32_MATCHES[:8]
-    right_matches = ROUND_OF_32_MATCHES[8:]
-    col_left, col_div, col_right = st.columns([5, 1, 5])
+    render_bracket_round("Round of 32", ROUND_OF_32_MATCHES, results)
+    render_bracket_round("Round of 16", ROUND_OF_16_MATCHES, results)
 
-    with col_left:
-        st.markdown("**Left Side**")
-        for match in left_matches:
-            render_match_card(match, results)
-
-    with col_div:
-        st.markdown("")
-
-    with col_right:
-        st.markdown("**Right Side**")
-        for match in right_matches:
-            render_match_card(match, results)
-
-# ── Tab 2: My Picks ───────────────────────────────────────────────────────────
 with tab2:
     if not knockout_preds:
         st.info("No knockout predictions loaded yet.")
@@ -246,21 +253,13 @@ with tab2:
         selected = st.selectbox("Select a person", people)
         person_preds = knockout_preds.get(selected, {})
 
-        total_pts, match_results = score_knockout_predictions(person_preds, results)
+        r32_pts, r32_results = score_round(person_preds, ROUND_OF_32_MATCHES, "Round of 32", 20, results)
+        r16_pts, r16_results = score_round(person_preds, ROUND_OF_16_MATCHES, "Round of 16", 40, results)
+        total_pts = r32_pts + r16_pts
 
         st.markdown(f'<div class="person-name">{selected}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="points-box">Round of 32 Points: {total_pts}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="points-box">Total: {total_pts} &nbsp;|&nbsp; R32: {r32_pts} &nbsp;|&nbsp; R16: {r16_pts}</div>', unsafe_allow_html=True)
         st.divider()
 
-        st.markdown('<div class="round-title">Round of 32</div>', unsafe_allow_html=True)
-        col_left, col_div, col_right = st.columns([5, 1, 5])
-        left_results = match_results[:8]
-        right_results = match_results[8:]
-
-        with col_left:
-            for match, pick, correct, pts in left_results:
-                render_match_card(match, results, pick, correct, pts)
-
-        with col_right:
-            for match, pick, correct, pts in right_results:
-                render_match_card(match, results, pick, correct, pts)
+        render_bracket_round("Round of 32", ROUND_OF_32_MATCHES, results, r32_results)
+        render_bracket_round("Round of 16", ROUND_OF_16_MATCHES, results, r16_results)
