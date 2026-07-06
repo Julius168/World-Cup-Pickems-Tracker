@@ -59,8 +59,8 @@ ROUND_OF_32_MATCHES = [
 ]
 
 ROUND_OF_16_MATCHES = [
-    {"num": 1, "id": "4653843", "home": "Canada",     "away": "Morocco"},
-    {"num": 2, "id": "4653842", "home": "Paraguay",   "away": "France"},
+    {"num": 2, "id": "4653843", "home": "Canada",     "away": "Morocco"},
+    {"num": 1, "id": "4653842", "home": "Paraguay",   "away": "France"},
     {"num": 3, "id": "4653844", "home": "Brazil",     "away": "Norway"},
     {"num": 4, "id": "4653845", "home": "Mexico",     "away": "England"},
     {"num": 5, "id": "4653846", "home": "Portugal",   "away": "Spain"},
