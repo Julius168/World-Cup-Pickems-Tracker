@@ -14,6 +14,7 @@ CACHE_PATH = os.path.join(BASE_DIR, "match_cache.json")
 KNOCKOUT_ROUND_CSVS = {
     "Round of 32": "Round_of_32_(Responses).csv",
     "Round of 16": "Round_of_16_(Responses).csv",
+    "Quarter Finals": "Quarter_Finals_(Responses).csv",
 }
 
 KNOCKOUT_ROUND_POINTS = {
@@ -35,6 +36,12 @@ ROUND_OF_16_IDS = [
     "4653842","4653843","4653844","4653845",
     "4653846","4653847","4653848","4653849",
 ]
+
+QUARTER_FINAL_IDS = [
+    "4653851","4653852","4653853","4653854",
+]
+
+ALL_KNOCKOUT_IDS = ROUND_OF_32_IDS + ROUND_OF_16_IDS + QUARTER_FINAL_IDS
 MATCH_IDS = [
     # Group stage
     4667751, 4667752, 4667753, 4667754, 4667755, 4667756, 4667757, 4667758, 4667759, 4667760,
@@ -383,7 +390,7 @@ def load_predictions():
             "player_picks":           player_picks,
             "team_picks":             team_picks,
             "zero_points_team":       get_col("Team to get 0 points in groups"),
-            "underdog_points":        get_col("How many points will Haiti, Curaçao and Cape Verde get combined"),
+            "underdog_points":        get_col("underdog_points"),
             "penalty_shootouts":      get_col("Amount of penalty shootouts"),
             "biggest_comeback":       get_col("Biggest comeback\n(Quantity of goals trailed by while eventually winning the game)"),
             "most_goals_game":        get_col("Most goals scored in a game (both teams combined including extra time)"),
@@ -431,14 +438,27 @@ def score_groups(person, group_standings, real_qualifiers):
 
 
 def score_top3_pick(picked, top3_entries, points_map={1: 50, 2: 20, 3: 10}):
-    """Score a single pick against a top3 list of dicts with 'name' key."""
+    """Score a single pick against a top3 list, handling ties by value."""
     if not picked or not top3_entries:
         return 0, "⬜ —"
-    names = [p.get("name", "") for p in top3_entries]
-    if picked in names:
-        rank = names.index(picked) + 1
-        pts = points_map.get(rank, 0)
-        return pts, f"{'⭐' if rank == 1 else '✅'} +{pts}"
+    seen_values = []
+    for p in top3_entries:
+        v = p.get("value")
+        if v not in seen_values:
+            seen_values.append(v)
+    value_to_rank = {}
+    rank = 1
+    for v in seen_values:
+        value_to_rank[v] = rank
+        count = sum(1 for p in top3_entries if p.get("value") == v)
+        rank += count
+    for player in top3_entries:
+        if player.get("name", "") == picked:
+            true_rank = value_to_rank.get(player.get("value"), 99)
+            pts = points_map.get(true_rank, 0)
+            if pts > 0:
+                return pts, f"{'⭐' if true_rank == 1 else '✅'} +{pts}"
+            return 0, "❌ +0"
     return 0, "❌ +0"
 
 
@@ -600,7 +620,7 @@ def fetch_knockout_results():
 def fetch_knockout_results_for_scoring():
     """Fetch Round of 32 results from FotMob matchDetails for accurate penalty data."""
     results = {}
-    for mid in ROUND_OF_32_IDS + ROUND_OF_16_IDS:
+    for mid in ROUND_OF_32_IDS:
         try:
             r = requests.get(f"https://www.fotmob.com/api/data/matchDetails?matchId={mid}", timeout=5)
             if r.status_code != 200:
@@ -640,21 +660,20 @@ def score_knockout_total(person_name):
     person_preds = ko_preds.get(person_name, {})
     total = 0
 
-    r32_picks = person_preds.get("Round of 32", [])
-    for i, mid in enumerate(ROUND_OF_32_IDS):
-        pick = r32_picks[i] if i < len(r32_picks) else ""
-        res = ko_results.get(mid, {})
-        winner = res.get("winner")
-        if winner and pick and pick.strip().lower() == winner.strip().lower():
-            total += 20
+    round_config = [
+        ("Round of 32",   ROUND_OF_32_IDS,    20),
+        ("Round of 16",   ROUND_OF_16_IDS,    40),
+        ("Quarter Finals", QUARTER_FINAL_IDS,  80),
+    ]
 
-    r16_picks = person_preds.get("Round of 16", [])
-    for i, mid in enumerate(ROUND_OF_16_IDS):
-        pick = r16_picks[i] if i < len(r16_picks) else ""
-        res = ko_results.get(mid, {})
-        winner = res.get("winner")
-        if winner and pick and pick.strip().lower() == winner.strip().lower():
-            total += 40
+    for round_name, match_ids, points in round_config:
+        picks = person_preds.get(round_name, [])
+        for i, mid in enumerate(match_ids):
+            pick = picks[i] if i < len(picks) else ""
+            res = ko_results.get(mid, {})
+            winner = res.get("winner")
+            if winner and pick and pick.strip().lower() == winner.strip().lower():
+                total += points
 
     return total
 

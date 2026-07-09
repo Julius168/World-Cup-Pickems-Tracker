@@ -59,14 +59,21 @@ ROUND_OF_32_MATCHES = [
 ]
 
 ROUND_OF_16_MATCHES = [
-    {"num": 1, "id": "4653842", "home": "Paraguay",   "away": "France"},
-    {"num": 2, "id": "4653843", "home": "Canada",     "away": "Morocco"},
+    {"num": 1, "id": "4653842", "home": "Canada",     "away": "Morocco"},
+    {"num": 2, "id": "4653843", "home": "Paraguay",   "away": "France"},
     {"num": 3, "id": "4653844", "home": "Brazil",     "away": "Norway"},
     {"num": 4, "id": "4653845", "home": "Mexico",     "away": "England"},
     {"num": 5, "id": "4653846", "home": "Portugal",   "away": "Spain"},
     {"num": 6, "id": "4653847", "home": "USA",        "away": "Belgium"},
     {"num": 7, "id": "4653848", "home": "Argentina",  "away": "Egypt"},
     {"num": 8, "id": "4653849", "home": "Switzerland","away": "Colombia"},
+]
+
+QUARTER_FINAL_MATCHES = [
+    {"num": 1, "id": "4653851", "home": "France",    "away": "Morocco"},
+    {"num": 2, "id": "4653852", "home": "Spain",     "away": "Belgium"},
+    {"num": 3, "id": "4653853", "home": "Norway",    "away": "England"},
+    {"num": 4, "id": "4653854", "home": "Argentina", "away": "Switzerland"},
 ]
 
 ROUND_POINTS = {
@@ -82,6 +89,7 @@ CSV_DIR = os.path.join(os.path.dirname(__file__), "..")
 ROUND_CSVS = {
     "Round of 32": os.path.join(CSV_DIR, "Round_of_32_(Responses).csv"),
     "Round of 16": os.path.join(CSV_DIR, "Round_of_16_(Responses).csv"),
+    "Quarter Finals": os.path.join(CSV_DIR, "Quarter_Finals_(Responses).csv"),
 }
 
 # ── Fetch results from matchDetails ──────────────────────────────────────────
@@ -132,12 +140,12 @@ def fetch_round_results(matches):
 def fetch_all_results():
     r32 = fetch_round_results(ROUND_OF_32_MATCHES)
     r16 = fetch_round_results(ROUND_OF_16_MATCHES)
-    return {**r32, **r16}
+    qf  = fetch_round_results(QUARTER_FINAL_MATCHES)
+    return {**r32, **r16, **qf}
 
 # ── Load predictions ──────────────────────────────────────────────────────────
 @st.cache_data
 def load_knockout_predictions():
-    
     all_preds = {}
     for round_name, csv_path in ROUND_CSVS.items():
         if not os.path.exists(csv_path):
@@ -153,8 +161,6 @@ def load_knockout_predictions():
                 all_preds[name] = {}
             all_preds[name][round_name] = picks
     return all_preds
-
-
 
 def score_round(person_preds, matches, round_name, points_per_correct, results):
     total = 0
@@ -244,6 +250,7 @@ tab1, tab2 = st.tabs(["📊 Bracket", "🎯 My Picks"])
 with tab1:
     render_bracket_round("Round of 32", ROUND_OF_32_MATCHES, results)
     render_bracket_round("Round of 16", ROUND_OF_16_MATCHES, results)
+    render_bracket_round("Quarter Finals", QUARTER_FINAL_MATCHES, results)
 
 with tab2:
     if not knockout_preds:
@@ -255,11 +262,13 @@ with tab2:
 
         r32_pts, r32_results = score_round(person_preds, ROUND_OF_32_MATCHES, "Round of 32", 20, results)
         r16_pts, r16_results = score_round(person_preds, ROUND_OF_16_MATCHES, "Round of 16", 40, results)
-        total_pts = r32_pts + r16_pts
+        qf_pts,  qf_results  = score_round(person_preds, QUARTER_FINAL_MATCHES, "Quarter Finals", 80, results)
+        total_pts = r32_pts + r16_pts + qf_pts
 
         st.markdown(f'<div class="person-name">{selected}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="points-box">Total: {total_pts} &nbsp;|&nbsp; R32: {r32_pts} &nbsp;|&nbsp; R16: {r16_pts}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="points-box">Total: {total_pts} &nbsp;|&nbsp; R32: {r32_pts} &nbsp;|&nbsp; R16: {r16_pts} &nbsp;|&nbsp; QF: {qf_pts}</div>', unsafe_allow_html=True)
         st.divider()
 
         render_bracket_round("Round of 32", ROUND_OF_32_MATCHES, results, r32_results)
         render_bracket_round("Round of 16", ROUND_OF_16_MATCHES, results, r16_results)
+        render_bracket_round("Quarter Finals", QUARTER_FINAL_MATCHES, results, qf_results)
