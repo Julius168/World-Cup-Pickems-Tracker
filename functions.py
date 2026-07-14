@@ -15,6 +15,7 @@ KNOCKOUT_ROUND_CSVS = {
     "Round of 32": "Round_of_32_(Responses).csv",
     "Round of 16": "Round_of_16_(Responses).csv",
     "Quarter Finals": "Quarter_Finals_(Responses).csv",
+    "Semi Finals": "Semi_Finals_(Responses).csv", 
 }
 
 KNOCKOUT_ROUND_POINTS = {
@@ -41,7 +42,11 @@ QUARTER_FINAL_IDS = [
     "4653851","4653852","4653853","4653854",
 ]
 
-ALL_KNOCKOUT_IDS = ROUND_OF_32_IDS + ROUND_OF_16_IDS + QUARTER_FINAL_IDS
+SEMI_FINAL_IDS = [
+    "4653855", "4653856",
+]
+
+ALL_KNOCKOUT_IDS = ROUND_OF_32_IDS + ROUND_OF_16_IDS + QUARTER_FINAL_IDS + SEMI_FINAL_IDS
 MATCH_IDS = [
     # Group stage
     4667751, 4667752, 4667753, 4667754, 4667755, 4667756, 4667757, 4667758, 4667759, 4667760,
@@ -620,7 +625,7 @@ def fetch_knockout_results():
 def fetch_knockout_results_for_scoring():
     """Fetch Round of 32 results from FotMob matchDetails for accurate penalty data."""
     results = {}
-    for mid in ROUND_OF_32_IDS:
+    for mid in ALL_KNOCKOUT_IDS:
         try:
             r = requests.get(f"https://www.fotmob.com/api/data/matchDetails?matchId={mid}", timeout=5)
             if r.status_code != 200:
@@ -664,6 +669,7 @@ def score_knockout_total(person_name):
         ("Round of 32",   ROUND_OF_32_IDS,    20),
         ("Round of 16",   ROUND_OF_16_IDS,    40),
         ("Quarter Finals", QUARTER_FINAL_IDS,  80),
+        ("Semi Finals", SEMI_FINAL_IDS, 160)
     ]
 
     for round_name, match_ids, points in round_config:

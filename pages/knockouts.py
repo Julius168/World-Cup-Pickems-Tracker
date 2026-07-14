@@ -71,9 +71,14 @@ ROUND_OF_16_MATCHES = [
 
 QUARTER_FINAL_MATCHES = [
     {"num": 1, "id": "4653851", "home": "France",    "away": "Morocco"},
-    {"num": 2, "id": "4653852", "home": "Spain",     "away": "Belgium"},
-    {"num": 3, "id": "4653853", "home": "Norway",    "away": "England"},
+    {"num": 2, "id": "4653852", "home": "Norway",    "away": "England"},
+    {"num": 3, "id": "4653853", "home": "Spain",     "away": "Belgium"},
     {"num": 4, "id": "4653854", "home": "Argentina", "away": "Switzerland"},
+]
+
+SEMI_FINAL_MATCHES = [
+    {"num": 1, "id": "4653855", "home": "France",    "away": "Spain"},
+    {"num": 2, "id": "4653856", "home": "England",    "away": "Argentina"},
 ]
 
 ROUND_POINTS = {
@@ -90,6 +95,7 @@ ROUND_CSVS = {
     "Round of 32": os.path.join(CSV_DIR, "Round_of_32_(Responses).csv"),
     "Round of 16": os.path.join(CSV_DIR, "Round_of_16_(Responses).csv"),
     "Quarter Finals": os.path.join(CSV_DIR, "Quarter_Finals_(Responses).csv"),
+    "Semi Finals": os.path.join(CSV_DIR, "Semi_Finals_(Responses).csv"),
 }
 
 # ── Fetch results from matchDetails ──────────────────────────────────────────
@@ -141,7 +147,8 @@ def fetch_all_results():
     r32 = fetch_round_results(ROUND_OF_32_MATCHES)
     r16 = fetch_round_results(ROUND_OF_16_MATCHES)
     qf  = fetch_round_results(QUARTER_FINAL_MATCHES)
-    return {**r32, **r16, **qf}
+    sf = fetch_round_results(SEMI_FINAL_MATCHES)
+    return {**r32, **r16, **qf, **sf}
 
 # ── Load predictions ──────────────────────────────────────────────────────────
 @st.cache_data
@@ -251,6 +258,7 @@ with tab1:
     render_bracket_round("Round of 32", ROUND_OF_32_MATCHES, results)
     render_bracket_round("Round of 16", ROUND_OF_16_MATCHES, results)
     render_bracket_round("Quarter Finals", QUARTER_FINAL_MATCHES, results)
+    render_bracket_round("Semi Finals", SEMI_FINAL_MATCHES, results )
 
 with tab2:
     if not knockout_preds:
@@ -263,12 +271,15 @@ with tab2:
         r32_pts, r32_results = score_round(person_preds, ROUND_OF_32_MATCHES, "Round of 32", 20, results)
         r16_pts, r16_results = score_round(person_preds, ROUND_OF_16_MATCHES, "Round of 16", 40, results)
         qf_pts,  qf_results  = score_round(person_preds, QUARTER_FINAL_MATCHES, "Quarter Finals", 80, results)
-        total_pts = r32_pts + r16_pts + qf_pts
+        sf_pts, sf_results = score_round(person_preds, SEMI_FINAL_MATCHES, "Semi Finals", 160, results )
+        total_pts = r32_pts + r16_pts + qf_pts + sf_pts
 
         st.markdown(f'<div class="person-name">{selected}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="points-box">Total: {total_pts} &nbsp;|&nbsp; R32: {r32_pts} &nbsp;|&nbsp; R16: {r16_pts} &nbsp;|&nbsp; QF: {qf_pts}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="points-box">Total: {total_pts} &nbsp;|&nbsp; R32: {r32_pts} &nbsp;|&nbsp; R16: {r16_pts} &nbsp;|&nbsp; QF: {qf_pts}&nbsp;|&nbsp; SF: {sf_pts}</div>', unsafe_allow_html=True)
         st.divider()
 
         render_bracket_round("Round of 32", ROUND_OF_32_MATCHES, results, r32_results)
         render_bracket_round("Round of 16", ROUND_OF_16_MATCHES, results, r16_results)
         render_bracket_round("Quarter Finals", QUARTER_FINAL_MATCHES, results, qf_results)
+        render_bracket_round("Semi Finals", SEMI_FINAL_MATCHES, results, sf_results)
+
