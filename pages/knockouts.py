@@ -79,7 +79,16 @@ QUARTER_FINAL_MATCHES = [
 SEMI_FINAL_MATCHES = [
     {"num": 1, "id": "4653855", "home": "France",    "away": "Spain"},
     {"num": 2, "id": "4653856", "home": "England",    "away": "Argentina"},
+
 ]
+
+THIRD_PLACE_MATCH = [
+    {"num": 1, "id" : "4653857", "home": "France", "away": "England"},
+]
+
+FINAL_MATCH = [
+    {"num": 1, "id" : "4653858", "home": "Spain", "away": "Argentina"},
+] 
 
 ROUND_POINTS = {
     "Round of 32": 20,
@@ -96,6 +105,8 @@ ROUND_CSVS = {
     "Round of 16": os.path.join(CSV_DIR, "Round_of_16_(Responses).csv"),
     "Quarter Finals": os.path.join(CSV_DIR, "Quarter_Finals_(Responses).csv"),
     "Semi Finals": os.path.join(CSV_DIR, "Semi_Finals_(Responses).csv"),
+    "Third Place Match": os.path.join(CSV_DIR, "3rd_(Responses).csv"),
+    "Final": os.path.join(CSV_DIR, "Finals_(Responses).csv"),
 }
 
 # ── Fetch results from matchDetails ──────────────────────────────────────────
@@ -148,7 +159,9 @@ def fetch_all_results():
     r16 = fetch_round_results(ROUND_OF_16_MATCHES)
     qf  = fetch_round_results(QUARTER_FINAL_MATCHES)
     sf = fetch_round_results(SEMI_FINAL_MATCHES)
-    return {**r32, **r16, **qf, **sf}
+    third = fetch_round_results(THIRD_PLACE_MATCH)
+    f = fetch_round_results(FINAL_MATCH)
+    return {**r32, **r16, **qf, **sf,**third,**f}
 
 # ── Load predictions ──────────────────────────────────────────────────────────
 @st.cache_data
@@ -229,6 +242,18 @@ def render_match_card(match, results, pick=None, correct=None, points=0):
 
 def render_bracket_round(title, matches, results, match_results=None):
     st.markdown(f'<div class="round-title">{title}</div>', unsafe_allow_html=True)
+    
+    if len(matches) == 1:
+        # Centre single match
+        _, col_centre, _ = st.columns([2, 3, 2])
+        with col_centre:
+            if match_results:
+                _, pick, correct, pts = match_results[0]
+                render_match_card(matches[0], results, pick, correct, pts)
+            else:
+                render_match_card(matches[0], results)
+        return
+
     left = matches[:len(matches)//2]
     right = matches[len(matches)//2:]
     col_left, _, col_right = st.columns([5, 1, 5])
@@ -259,6 +284,8 @@ with tab1:
     render_bracket_round("Round of 16", ROUND_OF_16_MATCHES, results)
     render_bracket_round("Quarter Finals", QUARTER_FINAL_MATCHES, results)
     render_bracket_round("Semi Finals", SEMI_FINAL_MATCHES, results )
+    render_bracket_round("Thrid Place Match", THIRD_PLACE_MATCH, results)
+    render_bracket_round("Final", FINAL_MATCH, results )
 
 with tab2:
     if not knockout_preds:
@@ -272,14 +299,19 @@ with tab2:
         r16_pts, r16_results = score_round(person_preds, ROUND_OF_16_MATCHES, "Round of 16", 40, results)
         qf_pts,  qf_results  = score_round(person_preds, QUARTER_FINAL_MATCHES, "Quarter Finals", 80, results)
         sf_pts, sf_results = score_round(person_preds, SEMI_FINAL_MATCHES, "Semi Finals", 160, results )
-        total_pts = r32_pts + r16_pts + qf_pts + sf_pts
+        t_pts, t_results = score_round(person_preds, THIRD_PLACE_MATCH, "Third Place Match", 200, results)
+        f_pts, f_results = score_round(person_preds, FINAL_MATCH, "Final", 400, results)
+        total_pts = r32_pts + r16_pts + qf_pts + sf_pts + t_pts, f_pts
 
         st.markdown(f'<div class="person-name">{selected}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="points-box">Total: {total_pts} &nbsp;|&nbsp; R32: {r32_pts} &nbsp;|&nbsp; R16: {r16_pts} &nbsp;|&nbsp; QF: {qf_pts}&nbsp;|&nbsp; SF: {sf_pts}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="points-box">Total: {total_pts} &nbsp;|&nbsp; R32: {r32_pts} &nbsp;|&nbsp; R16: {r16_pts} &nbsp;|&nbsp; QF: {qf_pts}&nbsp;|&nbsp; SF: {sf_pts}&nbsp;|&nbsp; Third: {t_pts}&nbsp;|&nbsp; F: {f_pts}</div>', unsafe_allow_html=True)
         st.divider()
 
         render_bracket_round("Round of 32", ROUND_OF_32_MATCHES, results, r32_results)
         render_bracket_round("Round of 16", ROUND_OF_16_MATCHES, results, r16_results)
         render_bracket_round("Quarter Finals", QUARTER_FINAL_MATCHES, results, qf_results)
         render_bracket_round("Semi Finals", SEMI_FINAL_MATCHES, results, sf_results)
+        render_bracket_round("Third Place Match", THIRD_PLACE_MATCH, results, t_results)
+        render_bracket_round("Final", FINAL_MATCH, results, f_results)
+
 
